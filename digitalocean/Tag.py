@@ -1,6 +1,8 @@
+from typing import Union, List
+
+from digitalocean import Volume
 from .baseapi import BaseAPI
-from .Droplet import Droplet
-from .Snapshot import Snapshot
+
 
 class Tag(BaseAPI):
     def __init__(self, *args, **kwargs):
@@ -8,13 +10,11 @@ class Tag(BaseAPI):
         self.resources = {}
         super(Tag, self).__init__(*args, **kwargs)
 
-
     @classmethod
     def get_object(cls, api_token, tag_name):
         tag = cls(token=api_token, name=tag_name)
         tag.load()
         return tag
-
 
     def load(self):
         """
@@ -27,7 +27,6 @@ class Tag(BaseAPI):
             setattr(self, attr, tag[attr])
 
         return self
-
 
     def create(self, **kwargs):
         """
@@ -43,10 +42,8 @@ class Tag(BaseAPI):
             self.name = output['tag']['name']
             self.resources = output['tag']['resources']
 
-
     def delete(self):
         return self.get_data("tags/%s" % self.name, type="DELETE")
-
 
     def __get_resources(self, resources, method):
 
@@ -59,7 +56,6 @@ class Tag(BaseAPI):
         )
         return tagged
 
-
     def __add_resources(self, resources):
         """
             Add the resources to this tag.
@@ -68,7 +64,6 @@ class Tag(BaseAPI):
                 resources: array - See API.
         """
         return self.__get_resources(resources, method='POST')
-
 
     def __remove_resources(self, resources):
         """
@@ -79,11 +74,10 @@ class Tag(BaseAPI):
         """
         return self.__get_resources(resources, method='DELETE')
 
-
-    def __build_resources_field(self, resources_to_tag, object_class, resource_type):
+    def __build_resources_field(self, resources_to_tag, resource_type):
         """
-            Private method to build the `resources` field used to tag/untag 
-            DO resources. Returns an array of objects containing two fields: 
+            Private method to build the `resources` field used to tag/untag
+            DO resources. Returns an array of objects containing two fields:
             resource_id and resource_type.
             It checks the type of objects in the 1st argument and build the
             right structure for the API. It accepts array of strings, array
@@ -93,65 +87,44 @@ class Tag(BaseAPI):
             See: https://developers.digitalocean.com/documentation/v2/#tag-a-resource
         """
         resources_field = []
-        if not isinstance(resources_to_tag, list): return resources_to_tag
+
         for resource_to_tag in resources_to_tag:
-            res = {}
-
-            try:
-                if isinstance(resource_to_tag, unicode):
-                    res = {"resource_id": resource_to_tag}
-            except NameError:
-                pass
-
-            if isinstance(resource_to_tag, str) or isinstance(resource_to_tag, int):
-                res = {"resource_id": str(resource_to_tag)}
-            elif isinstance(resource_to_tag, object_class):
-                res = {"resource_id": str(resource_to_tag.id)}
-
-            if len(res) > 0:
-                res["resource_type"] = resource_type
-                resources_field.append(res)
+            resource_id = getattr(resources_to_tag, "id", resource_to_tag)
+            if resource_id:
+                resources_field.append({
+                    "resource_type": resource_type,
+                    "resource_id": str(resource_id)
+                })
 
         return resources_field
 
-
-    def add_droplets(self, droplet):
+    def add_volumes(self, volumes: List[Union[Volume, str]]):
         """
-            Add the Tag to a Droplet.
-
-            Attributes accepted at creation time:
-                droplet: array of string or array of int, or array of Droplets.
+        Attach this tag to the given volumes.
         """
-        droplets = droplet
-        if not isinstance(droplets, list):
-            droplets = [droplet]
+        return self.add_resources(volumes, 'volume')
 
-        # Extracting data from the Droplet object
-        resources = self.__build_resources_field(droplets, Droplet, "droplet")
-        if len(resources) > 0:
-            return self.__add_resources(resources)
-
-        return False
-
-
-    def remove_droplets(self, droplet):
+    def remove_volumes(self, volumes: List[Union[Volume, str]]):
         """
-            Remove the Tag from the Droplet.
-
-            Attributes accepted at creation time:
-                droplet: array of string or array of int, or array of Droplets.
+        Remove this tag from the given volumes.
         """
-        droplets = droplet
-        if not isinstance(droplets, list):
-            droplets = [droplet]
+        return self.remove_resources(volumes, 'volume')
 
-        # Build resources field from the Droplet objects
-        resources = self.__build_resources_field(droplets, Droplet, "droplet")
-        if len(resources) > 0:
-            return self.__remove_resources(resources)
+    def add_droplets(self, droplets):
+        """
+            Add the Tag to a droplet or droplets.
 
-        return False
+            droplet: array of string or array of int, or array of Droplets.
+        """
+        return self.add_resources(droplets, 'droplet')
 
+    def remove_droplets(self, droplets):
+        """
+            Remove the Tag from the droplet or droplets.
+
+            droplet: array of string or array of int, or array of Droplets.
+        """
+        return self.remove_resources(droplets, 'droplet')
 
     def add_snapshots(self, snapshots):
         """
@@ -160,30 +133,50 @@ class Tag(BaseAPI):
             Attributes accepted at creation time:
                 snapshots: array of string or array of int or array of Snapshot.
         """
-        
-        if not isinstance(snapshots, list):
-            snapshots = [snapshots]
-
-        resources = self.__build_resources_field(snapshots, Snapshot, "volume_snapshot")
-        if len(resources) > 0:
-            return self.__add_resources(resources)
-        
-        return False
-
+        return self.remove_resources(snapshots, 'volume_snapshot')
 
     def remove_snapshots(self, snapshots):
         """
-            remove the Tag from the Snapshot.
+        remove the Tag from the Snapshot.
 
-            Attributes accepted at creation time:
-                snapshots: array of string or array of int or array of Snapshot.
+        snapshots: array of string or array of int or array of Snapshot.
         """
-        if not isinstance(snapshots, list):
-            snapshots = [snapshots]
+        return self.add_resources(snapshots, 'volume_snapshot')
 
-        resources = self.__build_resources_field(snapshots, Snapshot, "volume_snapshot")
-        if len(resources) > 0:
-            return self.__remove_resources(resources)
-        
+    def add_resources(self, resources, resource_type: str):
+        """
+        Add the Tag to a resource or resources.
+
+        resources: array of string or array of int, or array of resources
+                   of the specified resource type.
+        resource_type_id: The type of resource (i.e. droplet, volume_snapshot, volume)
+        """
+
+        if not isinstance(resources, list):
+            resources = [resources]
+
+        # Extracting data from the Droplet object
+        resource_fields = self.__build_resources_field(resources, resource_type)
+        if len(resource_fields) > 0:
+            return self.__add_resources(resource_fields)
+
         return False
 
+    def remove_resources(self, resources, resource_type: str):
+        """
+        Remove the Tag from a resource or resources.
+
+        resources: array of string or array of int, or array of resources
+                   of the specified resource type.
+        resource_type_id: The name of the resource type (i.e. droplet, volume_snapshot, volume)
+        """
+
+        if not isinstance(resources, list):
+            resources = [resources]
+
+        # Extracting data from the Droplet object
+        resource_fields = self.__build_resources_field(resources, resource_type)
+        if len(resource_fields) > 0:
+            return self.__remove_resources(resource_fields)
+
+        return False
