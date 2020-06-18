@@ -1,6 +1,6 @@
 from typing import Union, List
 
-from digitalocean import Volume
+from digitalocean.Volume import Volume
 from .baseapi import BaseAPI
 
 
