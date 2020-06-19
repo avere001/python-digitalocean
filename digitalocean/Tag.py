@@ -133,7 +133,7 @@ class Tag(BaseAPI):
             Attributes accepted at creation time:
                 snapshots: array of string or array of int or array of Snapshot.
         """
-        return self.remove_resources(snapshots, 'volume_snapshot')
+        return self.add_resources(snapshots, 'volume_snapshot')
 
     def remove_snapshots(self, snapshots):
         """
@@ -141,7 +141,7 @@ class Tag(BaseAPI):
 
         snapshots: array of string or array of int or array of Snapshot.
         """
-        return self.add_resources(snapshots, 'volume_snapshot')
+        return self.remove_resources(snapshots, 'volume_snapshot')
 
     def add_resources(self, resources, resource_type: str):
         """
